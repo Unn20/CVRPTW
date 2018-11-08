@@ -1,13 +1,8 @@
 #include <iostream>
 #include <fstream>
-#include <string>
 #include <vector>
-#include <math.h>
-#include <random>
 #include <chrono>
-#include <signal.h>
-#include <sys/wait.h>
-#include <unistd.h>
+#include <random>
 
 //generator liczb pseudolosowych
 thread_local std::mt19937 gen{std::random_device{}()};
@@ -287,31 +282,55 @@ Greedy(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVector, int &
     return;
 }
 
-void TestGreedy(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVector, int &VehicleCapacity,
-                long double **DistancesMatrix) {
+void TestGreedy(vector<Customer> &CustomersVector, vector<Vehicle> &BestVector, int &VehicleCapacity,
+                long double **DistancesMatrix, double &AlgTime) {
     high_resolution_clock::time_point t1, t2;
-    duration<double> Timer;
+    duration<double> Timer = (duration<double>) 0;
     t1 = high_resolution_clock::now();
 
-    vector<Vehicle> tempvector;
-    int less_trucks = 999999;
-    while (Timer.count() < 30) {
-        tempvector.clear();
-        Greedy(CustomersVector, tempvector, VehicleCapacity, DistancesMatrix);
+    vector<Vehicle> TempVector;
+    long double TimeResult, BestTime;
+    int VehiclesResult, BestVehicles;
+    int Epsilon = 100;
 
-        int result = (int)tempvector.size();
-        if (result < less_trucks) {
-            less_trucks = result;
-            VehiclesVector.clear();
-            for (int j = 0; j < tempvector.size(); j++)         //kopiowanie rozwiazania z tymczasowego wektora
-                VehiclesVector.push_back(tempvector[j]);
+    Greedy(CustomersVector, BestVector, VehicleCapacity, DistancesMatrix);
+    BestTime = SolutionValue(BestVector);
+    BestVehicles = (int) BestVector.size();
+    do {
+        TempVector.clear();
+        Greedy(CustomersVector, TempVector, VehicleCapacity, DistancesMatrix);
+        TimeResult = SolutionValue(TempVector);
+        VehiclesResult = (int) TempVector.size();
+
+        if (TimeResult < BestTime) {
+            BestTime = TimeResult;
+            BestVehicles = VehiclesResult;
+            BestVector.clear();
+            for (int i = 0; i < TempVector.size(); i++) {
+                BestVector.push_back(TempVector[i]);
+            }
+        } else if ((TimeResult < (BestTime + Epsilon)) && VehiclesResult < BestVehicles) {
+            TempVector.clear();
+            Greedy(CustomersVector, TempVector, VehicleCapacity, DistancesMatrix);
+            TimeResult = SolutionValue(TempVector);
+            VehiclesResult = (int) TempVector.size();
+
+            if (TimeResult < BestTime) {
+                BestTime = TimeResult;
+                BestVehicles = VehiclesResult;
+                BestVector.clear();
+                for (int i = 0; i < TempVector.size(); i++) {
+                    BestVector.push_back(TempVector[i]);
+                }
+            }
         }
         t2 = high_resolution_clock::now();
         Timer = duration_cast<duration<double>>(t2 - t1);
-    }
+    } while (Timer.count() < AlgTime);
 }
 
 int main() {
+    double AlgTime;
     string Filename;
     vector<Customer> CustomersVector;
     vector<Vehicle> VehiclesVector;
@@ -322,7 +341,8 @@ int main() {
     if (ReadingFromFile(Filename, CustomersVector, VehicleCapacity)) {
         cout << endl << "Dane wczytane" << endl << endl;
     }
-
+    cout << "Czas działania algorytmu (w sekundach): ";
+    cin >> AlgTime;
     //alokowanie tablicy dwuwymiarowej dla odleglosci
     long double **DistancesMatrix = new long double *[CustomersVector.size()];
     for (int i = 0; i < CustomersVector.size(); i++)
@@ -343,7 +363,7 @@ int main() {
             File << -1;
         }
     } else {
-        TestGreedy(CustomersVector, VehiclesVector, VehicleCapacity, DistancesMatrix);
+        TestGreedy(CustomersVector, VehiclesVector, VehicleCapacity, DistancesMatrix, AlgTime);
         SolutionPrinting(VehiclesVector);
         SaveToFile(VehiclesVector);
     }

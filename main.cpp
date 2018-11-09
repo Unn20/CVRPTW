@@ -3,6 +3,7 @@
 #include <vector>
 #include <chrono>
 #include <random>
+#include <iomanip>
 
 //generator liczb pseudolosowych
 thread_local std::mt19937 gen{std::random_device{}()};
@@ -149,6 +150,8 @@ long double SolutionValue(vector<Vehicle> &VehiclesVector) {
     return Result;
 }
 
+
+
 void SolutionPrinting(vector<Vehicle> &VehiclesVector) {
     cout << VehiclesVector.size() << " " << SolutionValue(VehiclesVector) << endl;
     for (int i = 0; i < VehiclesVector.size(); i++) {
@@ -167,7 +170,7 @@ bool SaveToFile(vector<Vehicle> &VehiclesVector) {
         cout << "Błąd otwarcia pliku do zapisu" << endl;
         return false;
     } else {
-        File << VehiclesVector.size() << " " << SolutionValue(VehiclesVector) << "\n";
+        File << VehiclesVector.size() << " " << setprecision(16) << SolutionValue(VehiclesVector) << "\n";
         for (int i = 0; i < VehiclesVector.size(); i++) {
             for (int j = 1; j < VehiclesVector[i].Route.size(); j++) {
                 File << VehiclesVector[i].Route[j].CID << " ";
@@ -193,9 +196,9 @@ void Test2(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVector, i
     }
 } //przydzielenie jednej ciezarowki wszystkim klientom
 void
-Greedy(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVector, int &VehicleCapacity, long double **Matrix) {
+Random_Greedy(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVector, int &VehicleCapacity, long double **Matrix) {
     bool *VisitedCustomers = new bool[CustomersVector.size()];
-    int *RandTable = new int[CustomersVector.size()];                           //tablica do losowego posortowania
+    int *RandTable = new int[CustomersVector.size()-1];                           //tablica do losowego posortowania
     for (int i = 0; i < CustomersVector.size(); i++) VisitedCustomers[i] = false;
     for (int i = 0; i < CustomersVector.size() - 1; i++) RandTable[i] = i + 1;
 
@@ -211,16 +214,17 @@ Greedy(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVector, int &
     int CurrentVehicle = 0, RandCustomer = 0;
 
     while (!Done) {
-        long double AvailableTime = 0;
-        int AvailableCapacity = VehicleCapacity, CurrentPosition;
+        long double AvailableTime;
+        int AvailableCapacity = VehicleCapacity, CurrentPosition = 0;
 
         VehiclesVector.push_back(Vehicle(VehicleCapacity));
         VehiclesVector[CurrentVehicle].Route.push_back(CustomersVector[0]);
         long double CurrentTime = 0;
         int CustomerNo = 0;
-
+//
         //szukanie losowego wierzcholka
-        for (int i = 1; i < CustomersVector.size(); i++) {
+        for (int i = 0; i < CustomersVector.size() -1; i++) {
+
             RandCustomer = RandTable[i];
             if (VisitedCustomers[RandCustomer]) continue;
             else break;
@@ -229,8 +233,8 @@ Greedy(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVector, int &
         VisitedCustomers[RandCustomer] = true;
         CustomerNo++;
 
-        CurrentTime = ServiceBeginning(VehiclesVector[CurrentVehicle].Route, CustomerNo) +
-                      CustomersVector[RandCustomer].Service;;
+        CurrentTime = max(Matrix[CurrentPosition][RandCustomer], (long double)CustomersVector[RandCustomer].ReadyTime) + CustomersVector[RandCustomer].Service;
+
         AvailableTime = CustomersVector[0].DueTime;                         //dostepny czas na odwiedzanie
         AvailableCapacity -= CustomersVector[RandCustomer].Demand;                   //zapas ladunku w ciezarowce
         CurrentPosition = RandCustomer;                                     //obecna pozycja
@@ -263,7 +267,7 @@ Greedy(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVector, int &
 
             VehiclesVector[CurrentVehicle].Route.push_back(CustomersVector[node_to_use]);
             VisitedCustomers[node_to_use] = true;
-            CurrentTime += Matrix[CurrentPosition][node_to_use] + CustomersVector[node_to_use].Service;
+            CurrentTime += max(Matrix[CurrentPosition][node_to_use], (long double)CustomersVector[node_to_use].ReadyTime - CurrentTime) + CustomersVector[node_to_use].Service;
             AvailableCapacity -= CustomersVector[node_to_use].Demand;          //zapas ladunku w ciezarowce
             CurrentPosition = node_to_use;
         }
@@ -282,7 +286,73 @@ Greedy(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVector, int &
     return;
 }
 
-void TestGreedy(vector<Customer> &CustomersVector, vector<Vehicle> &BestVector, int &VehicleCapacity,
+void
+Greedy(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVector, int &VehicleCapacity, long double **Matrix) {
+    bool *VisitedCustomers = new bool[CustomersVector.size()];
+    for (int i = 0; i < CustomersVector.size(); i++) VisitedCustomers[i] = false;
+
+    bool Done = false;
+    int CurrentVehicle = 0;
+    int CustomerNo = 0;
+
+    while (!Done) {
+        long double AvailableTime = CustomersVector[0].DueTime;
+
+        int AvailableCapacity = VehicleCapacity;
+        long double CurrentTime = 0;
+        int CurrentPosition = 0;
+
+        VehiclesVector.push_back(Vehicle(VehicleCapacity));
+        VehiclesVector[CurrentVehicle].Route.push_back(CustomersVector[0]);
+
+        //szukanie najblizszego wierzcholka z obecnej pozycji "rand"
+        bool possible = true;
+        long double best_value;
+        long double possible_value = 0;
+        int node_to_use = 0;
+        while (possible) {
+            best_value = 9999999;
+            possible = false;
+            for (int i = 1; i < CustomersVector.size(); i++) {
+                if (VisitedCustomers[i]) continue;       //czy odwiedzony
+                if (CustomersVector[i].Demand > AvailableCapacity) continue;   //czy ciezarowka ma dosc ladunku
+                if (CurrentTime + Matrix[CurrentPosition][i] > CustomersVector[i].DueTime) continue;
+                if (max(CurrentTime + Matrix[CurrentPosition][i], (long double) CustomersVector[i].ReadyTime) +
+                    CustomersVector[i].Service + Matrix[i][0] > AvailableTime)
+                    continue; //czy starczy czasu
+
+                possible = true;
+                possible_value = max(Matrix[CurrentPosition][i],
+                                     (long double) CustomersVector[i].ReadyTime - CurrentTime);
+                if (possible_value < best_value) {       //warunek sprawdza czy warto jechac do i-tego wierzcholka
+                    best_value = possible_value;
+                    node_to_use = i;
+                }
+            }
+            if (!possible) break;
+
+            VehiclesVector[CurrentVehicle].Route.push_back(CustomersVector[node_to_use]);
+            VisitedCustomers[node_to_use] = true;
+            CustomerNo++;
+            CurrentTime += max(Matrix[CurrentPosition][node_to_use], (long double)CustomersVector[node_to_use].ReadyTime - CurrentTime) + CustomersVector[node_to_use].Service;
+            AvailableCapacity -= CustomersVector[node_to_use].Demand;          //zapas ladunku w ciezarowce
+            CurrentPosition = node_to_use;
+        }
+
+        CurrentVehicle++;
+        //warunek zakonczenia petli po odwiedzeniu wszystkich wierzcholkow
+        Done = true;
+        for (int i = 1; i < CustomersVector.size(); i++) {
+            if (!VisitedCustomers[i])
+                Done = false;
+        }
+    }
+
+    delete[] VisitedCustomers;
+    return;
+}
+
+void Test_Random_Heurestics(vector<Customer> &CustomersVector, vector<Vehicle> &BestVector, int &VehicleCapacity,
                 long double **DistancesMatrix, double &AlgTime) {
     high_resolution_clock::time_point t1, t2;
     duration<double> Timer = (duration<double>) 0;
@@ -291,37 +361,31 @@ void TestGreedy(vector<Customer> &CustomersVector, vector<Vehicle> &BestVector, 
     vector<Vehicle> TempVector;
     long double TimeResult, BestTime;
     int VehiclesResult, BestVehicles;
-    int Epsilon = 100;
 
-    Greedy(CustomersVector, BestVector, VehicleCapacity, DistancesMatrix);
+    Random_Greedy(CustomersVector, BestVector, VehicleCapacity, DistancesMatrix);
     BestTime = SolutionValue(BestVector);
     BestVehicles = (int) BestVector.size();
     do {
         TempVector.clear();
-        Greedy(CustomersVector, TempVector, VehicleCapacity, DistancesMatrix);
+        Random_Greedy(CustomersVector, TempVector, VehicleCapacity, DistancesMatrix);
         TimeResult = SolutionValue(TempVector);
         VehiclesResult = (int) TempVector.size();
 
-        if (TimeResult < BestTime) {
+        if (TimeResult < BestTime && VehiclesResult == BestVehicles) {
             BestTime = TimeResult;
-            BestVehicles = VehiclesResult;
+            //BestVehicles = VehiclesResult;
             BestVector.clear();
             for (int i = 0; i < TempVector.size(); i++) {
                 BestVector.push_back(TempVector[i]);
             }
-        } else if ((TimeResult < (BestTime + Epsilon)) && VehiclesResult < BestVehicles) {
-            TempVector.clear();
-            Greedy(CustomersVector, TempVector, VehicleCapacity, DistancesMatrix);
-            TimeResult = SolutionValue(TempVector);
-            VehiclesResult = (int) TempVector.size();
+        }
 
-            if (TimeResult < BestTime) {
-                BestTime = TimeResult;
-                BestVehicles = VehiclesResult;
-                BestVector.clear();
-                for (int i = 0; i < TempVector.size(); i++) {
-                    BestVector.push_back(TempVector[i]);
-                }
+        else if (VehiclesResult < BestVehicles) {
+        BestTime = TimeResult;
+        BestVehicles = VehiclesResult;
+        BestVector.clear();
+        for (int i = 0; i < TempVector.size(); i++) {
+            BestVector.push_back(TempVector[i]);
             }
         }
         t2 = high_resolution_clock::now();
@@ -341,6 +405,7 @@ int main() {
     if (ReadingFromFile(Filename, CustomersVector, VehicleCapacity)) {
         cout << endl << "Dane wczytane" << endl << endl;
     }
+    else exit(-1);
     cout << "Czas działania algorytmu (w sekundach): ";
     cin >> AlgTime;
     //alokowanie tablicy dwuwymiarowej dla odleglosci
@@ -359,11 +424,13 @@ int main() {
         File.open("solution.txt");
         if (!File.good()) {
             cout << "Błąd odczytu pliku do zapisu" << endl;
+            exit(-1);
         } else {
             File << -1;
         }
     } else {
-        TestGreedy(CustomersVector, VehiclesVector, VehicleCapacity, DistancesMatrix, AlgTime);
+        //Test_Random_Heurestics(CustomersVector, VehiclesVector, VehicleCapacity, DistancesMatrix, AlgTime);
+        Greedy(CustomersVector, VehiclesVector, VehicleCapacity, DistancesMatrix);                              //dla greedy nie trzeba podawac czasu dzialania algorytmu
         SolutionPrinting(VehiclesVector);
         SaveToFile(VehiclesVector);
     }

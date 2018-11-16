@@ -195,9 +195,9 @@ void SolutionPrinting(vector<Vehicle> &VehiclesVector) {
         cout << endl;
     }
 }
-bool SaveSolutionToFile(vector<Vehicle> &VehiclesVector) {
+bool SaveSolutionToFile(vector<Vehicle> &VehiclesVector, string output_filename) {
     ofstream File;
-    File.open("solution.txt");
+    File.open(output_filename);
     if (!File.good()) {
         cout << "Błąd otwarcia pliku do zapisu" << endl;
         return false;
@@ -406,7 +406,7 @@ void RandomGreedy(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVe
             BestValue = INT_MAX;
             Possible = false;
             for (int i = 1; i < CustomersVector.size(); i++) {
-                if (VisitedCustomers[i]) continue;                                                                      //czy klient był już odwiedzony?
+                if (VisitedCustomers[i]) continue;                                                                      //czy klient był już odwiedzony?
                 if (CustomersVector[i].Demand > AvailableCapacity) continue;                                            //czy ciężarówka ma dość ładunku, by obsłużyć danego klienta?
                 if (CurrentTime + Matrix[CurrentPosition][i] > CustomersVector[i].DueTime) continue;                    //czy ciężarówka zdąży przyjechać przed zamknięciem sklepu?
                 if (max(CurrentTime + Matrix[CurrentPosition][i], (long double) CustomersVector[i].ReadyTime) +
@@ -470,7 +470,7 @@ void Greedy(vector<Customer> &CustomersVector, vector<Vehicle> &VehiclesVector, 
             BestValue = INT_MAX;
             Possible = false;
             for (int i = 1; i < CustomersVector.size(); i++) {
-                if (VisitedCustomers[i]) continue;                                                                      //czy klient był już odwiedzony?
+                if (VisitedCustomers[i]) continue;                                                                      //czy klient był już odwiedzony?
                 if (CustomersVector[i].Demand > AvailableCapacity) continue;                                            //czy ciężarówka ma dość ładunku, by obsłużyć danego klienta?
                 if (CurrentTime + Matrix[CurrentPosition][i] > CustomersVector[i].DueTime) continue;                    //czy ciężarówka zdąży przyjechać przed zamknięciem sklepu?
                 if (max(CurrentTime + Matrix[CurrentPosition][i], (long double) CustomersVector[i].ReadyTime) +
@@ -614,20 +614,16 @@ void TestingInHome() {
     }
 }
 
-void TestingAtLesson() {
-    double AlgTime;
+void TestingAtLesson(string input, string output, double time) {
+    double AlgTime = time;
     string Filename;
     vector<Customer> CustomersVector;
     vector<Vehicle> VehiclesVector;
     int VehicleCapacity;
 
-    cout << "Nazwa pliku z instancją: ";
-    cin >> Filename;
+    Filename = input;
     if (ReadingFromFile(Filename, CustomersVector, VehicleCapacity)) cout << endl << "Dane wczytane" << endl << endl;
     else exit(-1);
-
-    cout << "Czas działania algorytmu (w sekundach): ";
-    cin >> AlgTime;
 
     //alokowanie tablicy dwuwymiarowej dla odleglosci
     long double **DistancesMatrix = new long double *[CustomersVector.size()];
@@ -638,7 +634,7 @@ void TestingAtLesson() {
     if (!CheckCondition(CustomersVector, VehicleCapacity, DistancesMatrix)) {
         cout << "Brak rozwiązania" << endl;
         ofstream File;
-        File.open("solution.txt");
+        File.open(output);
         if (!File.good()) {
             cout << "Błąd odczytu pliku do zapisu" << endl;
             exit(-1);
@@ -648,7 +644,7 @@ void TestingAtLesson() {
     } else {
         TestRandomGreedy(CustomersVector, VehiclesVector, VehicleCapacity, DistancesMatrix, AlgTime);
         SolutionPrinting(VehiclesVector);
-        SaveSolutionToFile(VehiclesVector);
+        SaveSolutionToFile(VehiclesVector, output);
     }
 
     for (int i = 0; i < CustomersVector.size(); i++)
@@ -656,9 +652,19 @@ void TestingAtLesson() {
     delete[] DistancesMatrix;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    if (argc < 3){
+    cout << "Usage: " << argv[0] << " input_filename output_filename algorithm_time<seconds>" << endl;
+    cout << "Default time: 30s" << endl;
+    exit(-1);
+    }
+    double AlgTime = 30;
+    string input_filename = argv[1];
+    string output_filename = argv[2];
+    if (argc == 4)
+        AlgTime = atof(argv[3]);
     //TestingInHome();
-    TestingAtLesson();
-    getchar();
+    TestingAtLesson(input_filename, output_filename, AlgTime);
+    //getchar();
     return 0;
 }
